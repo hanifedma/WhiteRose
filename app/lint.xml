@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      USE_EXACT_ALARM is normally reserved for alarm-clock apps on Play. White Rose is a
+      sideloaded, exact-timing app whose entire purpose is a pulse on the minute, so the
+      permission is used as intended and never requires a runtime prompt on the watch.
+    -->
+    <issue id="ExactAlarm" severity="ignore" />
+    <issue id="ForegroundServicePermission" severity="ignore" />
+</lint>

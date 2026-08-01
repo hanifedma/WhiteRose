@@ -1,0 +1,14 @@
+# Add project specific R8 rules here.
+# AGP will combine all keep rule files in src/main/keepRules to pass to R8
+#
+# For more details, see
+#   https://d.android.com/r/tools/r8/keep-rules
+
+# Settings are persisted by enum constant name (BuzzPattern.DOUBLE, BuzzLength.MEDIUM, ...)
+# and read back with enumValueOf. Renaming the constants would make every stored value fail
+# to resolve, silently resetting the user's choices on the next launch.
+-keepclassmembers enum com.whiterose.minute.data.** {
+    <fields>;
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}

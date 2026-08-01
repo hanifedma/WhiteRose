@@ -1,0 +1,23 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+/.kotlin
+
+# Signing material. The keystore is what lets a new build install over an existing one on
+# the watch, so keep a private backup of it — but it must never reach a public repository.
+/keystore/
+*.jks
+*.keystore
+keystore.properties

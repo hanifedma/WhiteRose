@@ -19,9 +19,6 @@ object Haptics {
     /** Index 0 is unused so the array lines up with the 1..5 strength levels. */
     private val AMPLITUDES = intArrayOf(0, 48, 92, 140, 196, 255)
 
-    private const val BASE_ON_MS = 72.0
-    private const val BASE_GAP_MS = 95.0
-
     fun vibrator(context: Context): Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)
@@ -41,19 +38,8 @@ object Haptics {
         play(vibrator, effect, prefs.bypassDnd)
     }
 
-    private fun timings(prefs: Prefs): LongArray {
-        val on = (BASE_ON_MS * prefs.length.scale).toLong().coerceAtLeast(20L)
-        val gap = (BASE_GAP_MS * prefs.length.scale).toLong().coerceIn(70L, 200L)
-        return when (prefs.pattern) {
-            BuzzPattern.SINGLE -> longArrayOf(on)
-            BuzzPattern.DOUBLE -> longArrayOf(on, gap, on)
-            BuzzPattern.TRIPLE -> longArrayOf(on, gap, on, gap, on)
-            BuzzPattern.LONG -> longArrayOf(on * 4)
-        }
-    }
-
     private fun effectFor(vibrator: Vibrator, prefs: Prefs): VibrationEffect? {
-        val timings = timings(prefs)
+        val timings = prefs.segmentsMs()
         if (timings.isEmpty()) return null
         return if (vibrator.hasAmplitudeControl()) {
             val amplitude = AMPLITUDES[prefs.strength.coerceIn(1, Prefs.MAX_STRENGTH)]

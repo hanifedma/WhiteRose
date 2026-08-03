@@ -14,8 +14,9 @@ Built for the **Samsung Galaxy Watch 7 (40 mm)**, Wear OS 5 / One UI Watch 6.
 
 | | |
 |---|---|
-| **Cadence** | Fixed at 60 seconds, anchored to the wall clock — a buzz lands at :00 of every minute, and never drifts |
-| **Strength** | 5 levels (Whisper → Maximum), mapped to real motor amplitude |
+| **Cadence** | Fixed at 60 seconds, anchored to the wall clock — an alert lands at :00 of every minute, and never drifts |
+| **Alert by** | Vibration, a Casio-style beep, or both together |
+| **Strength** | 5 levels (Whisper → Maximum), mapped to real motor amplitude and beep volume |
 | **Pattern** | Single / Double / Triple / Long |
 | **Length** | Short / Medium / Long pulse duration |
 | **Quiet hours** | Optional window (e.g. 23:00–07:00) where it stays silent but stays armed |
@@ -23,7 +24,26 @@ Built for the **Samsung Galaxy Watch 7 (40 mm)**, Wear OS 5 / One UI Watch 6.
 | **Exact timing** | Optional wake lock for "never misses, uses more battery" |
 | **Ignore DND** | On by default, so Do Not Disturb doesn't silently stop it |
 
-Changing strength, pattern or length buzzes immediately so you can feel the change on your wrist.
+Changing any of these fires the alert immediately, so you feel or hear the change as you make it.
+
+### The beep
+
+The tone is **4096 Hz** — not arbitrary. A Casio digital watch divides its 32.768 kHz quartz
+crystal by 8, which lands exactly there, so it is the pitch of the button-press beep on an F-91W.
+Because those watches drive a piezo element with a square wave, the tone is bright and thin
+rather than round, which is reproduced here by adding the 3rd and 5th harmonics. The envelope is
+a hard gate with ~1 ms edges: the abrupt start and stop are what make it read as a *click*
+rather than a tone.
+
+It is synthesised at playback rather than shipped as an audio file, which means Pattern and
+Length apply to sound exactly as they do to vibration — a "Double" beep lands on the same edges
+as a "Double" buzz, and in **Both** mode the two are measured firing 6 ms apart. It also means
+the APK carries no audio asset.
+
+The beep plays with `USAGE_ALARM` (or `USAGE_NOTIFICATION` when *Ignore DND* is off) and
+deliberately **does not take audio focus** — a once-a-minute chirp should mix over your music,
+not pause it. If the relevant volume is at zero, or the watch has no speaker, the app says so
+in a row under *Alert by* instead of failing silently.
 
 ## Installing on the watch
 
@@ -124,7 +144,8 @@ app update, and whenever the clock or time zone changes.
 
 | Check | Result |
 |---|---|
-| Accuracy | Buzzes land 1–8 ms after the minute boundary, never twice in a minute |
+| Accuracy | Alerts land 1–8 ms after the minute boundary, never twice in a minute |
+| Alert modes | Vibrate buzzes only; Beep beeps only; Both fire 6 ms apart on the same tick |
 | Deep Doze, no battery exemption | 4 buzzes in 4 minutes — survives |
 | Deep Doze, battery exempt | 4 buzzes in 4 minutes — survives |
 | Reboot | Service and alarm back up unattended; buzzing resumed at the first minute after boot |
@@ -191,7 +212,9 @@ app/src/main/java/com/whiterose/minute/
     PulseService.kt     foreground service, silent notification, optional wake lock
     PulseReceiver.kt    alarm tick -> buzz -> re-arm
     BootReceiver.kt     restart after boot / update / clock change
+    Alerter.kt          one entry point for "announce this minute"
     Haptics.kt          strength, pattern and length -> VibrationEffect
+    Beeper.kt           the same settings -> synthesised 4096 Hz PCM, played via AudioTrack
   data/Settings.kt      SharedPreferences-backed settings exposed as a StateFlow
   ui/                   Wear Compose: countdown ring + single scrolling settings list
 ```

@@ -62,7 +62,8 @@ import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.whiterose.minute.R
-import com.whiterose.minute.core.Haptics
+import com.whiterose.minute.core.Alerter
+import com.whiterose.minute.core.Beeper
 import com.whiterose.minute.core.PulseScheduler
 import com.whiterose.minute.core.PulseService
 import com.whiterose.minute.data.Prefs
@@ -95,12 +96,14 @@ fun WhiteRoseScreen() {
 
     var notificationsAllowed by remember { mutableStateOf(context.hasNotificationPermission()) }
     var batteryUnrestricted by remember { mutableStateOf(context.isBatteryUnrestricted()) }
+    var beepMuted by remember { mutableStateOf(false) }
     // These can only change while the user is away in Settings, so re-read on the way back
     // instead of polling for something that is almost never different.
-    LaunchedEffect(focused) {
+    LaunchedEffect(focused, prefs.alertMode, prefs.bypassDnd) {
         if (!focused) return@LaunchedEffect
         notificationsAllowed = context.hasNotificationPermission()
         batteryUnrestricted = context.isBatteryUnrestricted()
+        beepMuted = Beeper.isInaudible(context, prefs)
     }
 
     // Set when the watch turns out to have no screen that can grant the exemption.
@@ -187,6 +190,36 @@ fun WhiteRoseScreen() {
                 }
 
                 item {
+                    SettingButton(
+                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                        transformation = SurfaceTransformation(spec),
+                        label = stringResource(R.string.alert_mode),
+                        secondary = stringResource(prefs.alertMode.labelRes),
+                        iconRes =
+                            if (prefs.alertMode.beeps) R.drawable.ic_sound
+                            else R.drawable.ic_pulse,
+                        onClick = {
+                            val next = prefs.alertMode.next()
+                            store.setAlertMode(next)
+                            Alerter.fire(context, prefs.copy(alertMode = next))
+                        },
+                    )
+                }
+
+                if (prefs.alertMode.beeps && beepMuted) {
+                    item {
+                        SettingButton(
+                            modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                            transformation = SurfaceTransformation(spec),
+                            label = stringResource(R.string.muted_title),
+                            secondary = stringResource(R.string.muted_desc),
+                            iconRes = R.drawable.ic_info,
+                            onClick = { context.openSoundSettings() },
+                        )
+                    }
+                }
+
+                item {
                     SliderRow(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
                         caption = stringResource(R.string.strength) + " · " +
@@ -197,7 +230,7 @@ fun WhiteRoseScreen() {
                         onValueChange = { level ->
                             store.setStrength(level)
                             // Let the wrist judge the new level straight away.
-                            Haptics.buzz(context, prefs.copy(strength = level))
+                            Alerter.fire(context, prefs.copy(strength = level))
                         },
                     )
                 }
@@ -212,7 +245,7 @@ fun WhiteRoseScreen() {
                         onClick = {
                             val next = prefs.pattern.next()
                             store.setPattern(next)
-                            Haptics.buzz(context, prefs.copy(pattern = next))
+                            Alerter.fire(context, prefs.copy(pattern = next))
                         },
                     )
                 }
@@ -227,7 +260,7 @@ fun WhiteRoseScreen() {
                         onClick = {
                             val next = prefs.length.next()
                             store.setLength(next)
-                            Haptics.buzz(context, prefs.copy(length = next))
+                            Alerter.fire(context, prefs.copy(length = next))
                         },
                     )
                 }
@@ -240,7 +273,7 @@ fun WhiteRoseScreen() {
                         secondary = stringResource(R.string.feel_it_now),
                         iconRes = R.drawable.ic_pulse,
                         filled = true,
-                        onClick = { Haptics.buzz(context, prefs) },
+                        onClick = { Alerter.fire(context, prefs) },
                     )
                 }
 
@@ -614,6 +647,24 @@ private fun Context.openNotificationSettings() {
  * Wear builds are inconsistent here: the per-app prompt is frequently absent, so fall back to
  * the global list and finally to the app's own details page, which every build does have.
  */
+private fun Context.openSoundSettings() {
+    val candidates = listOf(
+        Intent(Settings.ACTION_SOUND_SETTINGS),
+        Intent(Settings.ACTION_SETTINGS),
+    )
+    for (intent in candidates) {
+        if (!leadsSomewhereReal(intent)) continue
+        try {
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: ActivityNotFoundException) {
+            // Fall through to the next screen this watch build might have.
+        } catch (_: SecurityException) {
+            // Present but protected on some builds — treat exactly like missing.
+        }
+    }
+}
+
 private fun Context.requestBatteryExemption(): Boolean {
     val candidates = listOf(
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)

@@ -12,11 +12,17 @@
     </plurals>
 
     <!-- Sections -->
-    <string name="section_vibration">Vibration</string>
+    <string name="section_vibration">Alert</string>
     <string name="section_schedule">Schedule</string>
     <string name="section_system">System</string>
 
     <!-- Vibration -->
+    <string name="alert_mode">Alert by</string>
+    <string name="mode_vibrate">Vibration</string>
+    <string name="mode_beep">Beep</string>
+    <string name="mode_both">Both</string>
+    <string name="muted_title">Volume is 0</string>
+    <string name="muted_desc">Beeps will be silent</string>
     <string name="strength">Strength</string>
     <string name="strength_1">Whisper</string>
     <string name="strength_2">Light</string>
@@ -32,8 +38,8 @@
     <string name="length_short">Short</string>
     <string name="length_medium">Medium</string>
     <string name="length_long">Long</string>
-    <string name="test_buzz">Test buzz</string>
-    <string name="feel_it_now">Feel it now</string>
+    <string name="test_buzz">Test alert</string>
+    <string name="feel_it_now">Try it now</string>
 
     <!-- Schedule -->
     <string name="quiet_hours">Quiet hours</string>

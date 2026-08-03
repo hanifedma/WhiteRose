@@ -24,7 +24,7 @@ object Pulser {
 
         val now = System.currentTimeMillis()
         if (claim(PulseScheduler.minuteIndex(now)) && !prefs.isQuietAt(now)) {
-            Haptics.buzz(app, prefs)
+            Alerter.fire(app, prefs)
             store.recordBuzz()
         }
 

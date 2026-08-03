@@ -28,10 +28,23 @@ enum class BuzzLength(@param:StringRes val labelRes: Int, val scale: Float) {
     fun next(): BuzzLength = entries[(ordinal + 1) % entries.size]
 }
 
+/** How the minute announces itself: on the wrist, out loud, or both. */
+enum class AlertMode(@param:StringRes val labelRes: Int) {
+    VIBRATE(R.string.mode_vibrate),
+    BEEP(R.string.mode_beep),
+    BOTH(R.string.mode_both);
+
+    val vibrates: Boolean get() = this != BEEP
+    val beeps: Boolean get() = this != VIBRATE
+
+    fun next(): AlertMode = entries[(ordinal + 1) % entries.size]
+}
+
 fun formatHour(hour: Int): String = "%02d:00".format(hour.coerceIn(0, 23))
 
 data class Prefs(
     val enabled: Boolean = false,
+    val alertMode: AlertMode = AlertMode.VIBRATE,
     val strength: Int = 3,
     val pattern: BuzzPattern = BuzzPattern.DOUBLE,
     val length: BuzzLength = BuzzLength.MEDIUM,
@@ -65,8 +78,27 @@ data class Prefs(
         }
     }
 
+    /**
+     * The alert as alternating on/off durations in milliseconds, starting with an "on".
+     *
+     * Shared by the vibrator and the beeper so a Double pattern feels and sounds like the
+     * same thing, and so "Both" lands the buzz and the beep on exactly the same edges.
+     */
+    fun segmentsMs(): LongArray {
+        val on = (BASE_ON_MS * length.scale).toLong().coerceAtLeast(20L)
+        val gap = (BASE_GAP_MS * length.scale).toLong().coerceIn(70L, 200L)
+        return when (pattern) {
+            BuzzPattern.SINGLE -> longArrayOf(on)
+            BuzzPattern.DOUBLE -> longArrayOf(on, gap, on)
+            BuzzPattern.TRIPLE -> longArrayOf(on, gap, on, gap, on)
+            BuzzPattern.LONG -> longArrayOf(on * 4)
+        }
+    }
+
     companion object {
         const val MAX_STRENGTH = 5
+        private const val BASE_ON_MS = 72.0
+        private const val BASE_GAP_MS = 95.0
     }
 }
 
@@ -85,6 +117,8 @@ class SettingsStore private constructor(context: Context) {
     val current: Prefs get() = _state.value
 
     fun setEnabled(value: Boolean) = edit { putBoolean(KEY_ENABLED, value) }
+
+    fun setAlertMode(value: AlertMode) = edit { putString(KEY_ALERT_MODE, value.name) }
 
     fun setStrength(value: Int) = edit { putInt(KEY_STRENGTH, value.coerceIn(1, Prefs.MAX_STRENGTH)) }
 
@@ -115,6 +149,7 @@ class SettingsStore private constructor(context: Context) {
 
     private fun read() = Prefs(
         enabled = prefs.getBoolean(KEY_ENABLED, false),
+        alertMode = enumOr(prefs.getString(KEY_ALERT_MODE, null), AlertMode.VIBRATE),
         strength = prefs.getInt(KEY_STRENGTH, 3),
         pattern = enumOr(prefs.getString(KEY_PATTERN, null), BuzzPattern.DOUBLE),
         length = enumOr(prefs.getString(KEY_LENGTH, null), BuzzLength.MEDIUM),
@@ -146,6 +181,7 @@ class SettingsStore private constructor(context: Context) {
     companion object {
         private const val NAME = "white_rose"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_ALERT_MODE = "alert_mode"
         private const val KEY_STRENGTH = "strength"
         private const val KEY_PATTERN = "pattern"
         private const val KEY_LENGTH = "length"

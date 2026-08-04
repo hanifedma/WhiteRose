@@ -15,4 +15,12 @@ object Alerter {
         if (prefs.alertMode.vibrates) Haptics.buzz(context, prefs)
         if (prefs.alertMode.beeps) Beeper.beep(context, prefs)
     }
+
+    /**
+     * Plays a single output regardless of the current mode, for the live previews while a
+     * channel is being tuned — adjusting the buzz in "Both" should not also fire the beep.
+     */
+    fun preview(context: Context, prefs: Prefs, forBeep: Boolean) {
+        if (forBeep) Beeper.beep(context, prefs) else Haptics.buzz(context, prefs)
+    }
 }

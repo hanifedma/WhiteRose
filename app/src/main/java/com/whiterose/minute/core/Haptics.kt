@@ -7,7 +7,7 @@ import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import com.whiterose.minute.data.BuzzPattern
+import com.whiterose.minute.data.ChannelSettings
 import com.whiterose.minute.data.Prefs
 
 /**
@@ -39,17 +39,18 @@ object Haptics {
     }
 
     private fun effectFor(vibrator: Vibrator, prefs: Prefs): VibrationEffect? {
-        val timings = prefs.segmentsMs()
+        val channel = prefs.vibration
+        val timings = channel.segmentsMs()
         if (timings.isEmpty()) return null
         return if (vibrator.hasAmplitudeControl()) {
-            val amplitude = AMPLITUDES[prefs.strength.coerceIn(1, Prefs.MAX_STRENGTH)]
+            val amplitude = AMPLITUDES[channel.strength.coerceIn(1, ChannelSettings.MAX_STRENGTH)]
             // Even slots are the pulses, odd slots are the silent gaps between them.
             val amplitudes = IntArray(timings.size) { if (it % 2 == 0) amplitude else 0 }
             VibrationEffect.createWaveform(timings, amplitudes, -1)
         } else {
             // Some motors are on/off only. Approximate strength with pulse length instead,
             // which is the closest thing to "stronger" such hardware can express.
-            val stretch = 0.55 + 0.22 * prefs.strength.coerceIn(1, Prefs.MAX_STRENGTH)
+            val stretch = 0.55 + 0.22 * channel.strength.coerceIn(1, ChannelSettings.MAX_STRENGTH)
             val onOff = LongArray(timings.size + 1)
             onOff[0] = 0 // createWaveform(timings, repeat) starts with an off period
             for (i in timings.indices) {

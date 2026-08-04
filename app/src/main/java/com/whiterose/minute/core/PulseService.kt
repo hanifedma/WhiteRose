@@ -192,7 +192,8 @@ class PulseService : Service() {
             if (prefs.isQuietAt(System.currentTimeMillis())) {
                 getString(R.string.notif_quiet, formatHour(prefs.quietToHour))
             } else {
-                getString(R.string.notif_running, getString(prefs.strengthLabelRes))
+                // Strength now differs per output, so the mode is the useful thing to show.
+                getString(R.string.notif_running, getString(prefs.alertMode.labelRes))
             }
 
         return Notification.Builder(this, CHANNEL_ID)

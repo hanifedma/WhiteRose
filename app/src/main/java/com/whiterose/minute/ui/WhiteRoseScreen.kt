@@ -66,6 +66,8 @@ import com.whiterose.minute.core.Alerter
 import com.whiterose.minute.core.Beeper
 import com.whiterose.minute.core.PulseScheduler
 import com.whiterose.minute.core.PulseService
+import com.whiterose.minute.data.AlertMode
+import com.whiterose.minute.data.ChannelSettings
 import com.whiterose.minute.data.Prefs
 import com.whiterose.minute.data.SettingsStore
 import com.whiterose.minute.data.formatHour
@@ -219,50 +221,93 @@ fun WhiteRoseScreen() {
                     }
                 }
 
-                item {
-                    SliderRow(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                        caption = stringResource(R.string.strength) + " · " +
-                            stringResource(prefs.strengthLabelRes),
-                        value = prefs.strength,
-                        range = 1..Prefs.MAX_STRENGTH,
-                        segmented = true,
-                        onValueChange = { level ->
-                            store.setStrength(level)
-                            // Let the wrist judge the new level straight away.
-                            Alerter.fire(context, prefs.copy(strength = level))
-                        },
-                    )
+                // Vibration and beep each keep their own strength, pattern and length, so the
+                // controls are rendered per active output. In Both mode that means two
+                // labelled groups; otherwise the "Alert by" row above already names the one.
+                val channels = when (prefs.alertMode) {
+                    AlertMode.VIBRATE -> listOf(false)
+                    AlertMode.BEEP -> listOf(true)
+                    AlertMode.BOTH -> listOf(false, true)
                 }
 
-                item {
-                    SettingButton(
-                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
-                        transformation = SurfaceTransformation(spec),
-                        label = stringResource(R.string.pattern),
-                        secondary = stringResource(prefs.pattern.labelRes),
-                        iconRes = R.drawable.ic_pulse,
-                        onClick = {
-                            val next = prefs.pattern.next()
-                            store.setPattern(next)
-                            Alerter.fire(context, prefs.copy(pattern = next))
-                        },
-                    )
-                }
+                for (forBeep in channels) {
+                    val channel = prefs.channel(forBeep)
 
-                item {
-                    SettingButton(
-                        modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
-                        transformation = SurfaceTransformation(spec),
-                        label = stringResource(R.string.length),
-                        secondary = stringResource(prefs.length.labelRes),
-                        iconRes = R.drawable.ic_clock,
-                        onClick = {
-                            val next = prefs.length.next()
-                            store.setLength(next)
-                            Alerter.fire(context, prefs.copy(length = next))
-                        },
-                    )
+                    if (prefs.alertMode == AlertMode.BOTH) {
+                        item {
+                            ListHeader(
+                                modifier = Modifier.fillMaxWidth()
+                                    .transformedHeight(this, spec),
+                                transformation = SurfaceTransformation(spec),
+                            ) {
+                                Text(
+                                    stringResource(
+                                        if (forBeep) R.string.mode_beep
+                                        else R.string.mode_vibrate
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    item {
+                        SliderRow(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                            caption = stringResource(R.string.strength) + " · " +
+                                stringResource(channel.strengthLabelRes),
+                            value = channel.strength,
+                            range = 1..ChannelSettings.MAX_STRENGTH,
+                            segmented = true,
+                            onValueChange = { level ->
+                                store.setStrength(forBeep, level)
+                                // Preview only the output being edited, so tuning the buzz in
+                                // Both mode does not also fire the beep.
+                                Alerter.preview(
+                                    context,
+                                    prefs.withChannel(forBeep) { it.copy(strength = level) },
+                                    forBeep,
+                                )
+                            },
+                        )
+                    }
+
+                    item {
+                        SettingButton(
+                            modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                            transformation = SurfaceTransformation(spec),
+                            label = stringResource(R.string.pattern),
+                            secondary = stringResource(channel.pattern.labelRes),
+                            iconRes = if (forBeep) R.drawable.ic_sound else R.drawable.ic_pulse,
+                            onClick = {
+                                val next = channel.pattern.next()
+                                store.setPattern(forBeep, next)
+                                Alerter.preview(
+                                    context,
+                                    prefs.withChannel(forBeep) { it.copy(pattern = next) },
+                                    forBeep,
+                                )
+                            },
+                        )
+                    }
+
+                    item {
+                        SettingButton(
+                            modifier = Modifier.fillMaxWidth().transformedHeight(this, spec),
+                            transformation = SurfaceTransformation(spec),
+                            label = stringResource(R.string.length),
+                            secondary = stringResource(channel.length.labelRes),
+                            iconRes = R.drawable.ic_clock,
+                            onClick = {
+                                val next = channel.length.next()
+                                store.setLength(forBeep, next)
+                                Alerter.preview(
+                                    context,
+                                    prefs.withChannel(forBeep) { it.copy(length = next) },
+                                    forBeep,
+                                )
+                            },
+                        )
+                    }
                 }
 
                 item {

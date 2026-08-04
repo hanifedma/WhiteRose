@@ -44,7 +44,7 @@
     <!-- Schedule -->
     <string name="quiet_hours">Quiet hours</string>
     <string name="quiet_hours_on">%1$s – %2$s</string>
-    <string name="quiet_hours_off">Off — buzz all day</string>
+    <string name="quiet_hours_off">Alert all day</string>
     <string name="quiet_from">Quiet from</string>
     <string name="quiet_to">Quiet until</string>
 

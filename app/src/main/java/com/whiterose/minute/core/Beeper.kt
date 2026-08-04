@@ -11,6 +11,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import com.whiterose.minute.data.ChannelSettings
 import com.whiterose.minute.data.Prefs
 import kotlin.math.PI
 import kotlin.math.sin
@@ -157,12 +158,13 @@ object Beeper {
 
     /** Renders the alert's on/off segments into 16-bit mono PCM. */
     private fun synthesise(prefs: Prefs): ShortArray {
-        val segments = prefs.segmentsMs()
+        val channel = prefs.beep
+        val segments = channel.segmentsMs()
         if (segments.isEmpty()) return ShortArray(0)
 
         val counts = IntArray(segments.size) { (SAMPLE_RATE * segments[it] / 1_000L).toInt() }
         val out = ShortArray(counts.sum())
-        val gain = GAINS[prefs.strength.coerceIn(1, Prefs.MAX_STRENGTH)]
+        val gain = GAINS[channel.strength.coerceIn(1, ChannelSettings.MAX_STRENGTH)]
         val ramp = (SAMPLE_RATE * RAMP_MS / 1_000.0).toInt().coerceAtLeast(1)
 
         var index = 0

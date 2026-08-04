@@ -42,19 +42,16 @@ enum class AlertMode(@param:StringRes val labelRes: Int) {
 
 fun formatHour(hour: Int): String = "%02d:00".format(hour.coerceIn(0, 23))
 
-data class Prefs(
-    val enabled: Boolean = false,
-    val alertMode: AlertMode = AlertMode.VIBRATE,
+/**
+ * How one output is shaped. Vibration and beep each own a set, so switching between them
+ * restores whatever you last chose for that one rather than dragging the other's settings
+ * along — a long, slow buzz and a short, sharp beep are both reasonable, and neither should
+ * overwrite the other.
+ */
+data class ChannelSettings(
     val strength: Int = 3,
     val pattern: BuzzPattern = BuzzPattern.DOUBLE,
     val length: BuzzLength = BuzzLength.MEDIUM,
-    val quietEnabled: Boolean = false,
-    val quietFromHour: Int = 23,
-    val quietToHour: Int = 7,
-    val startOnBoot: Boolean = true,
-    val keepAwake: Boolean = false,
-    val bypassDnd: Boolean = true,
-    val buzzCount: Int = 0,
 ) {
     @get:StringRes
     val strengthLabelRes: Int
@@ -66,23 +63,11 @@ data class Prefs(
             else -> R.string.strength_5
         }
 
-    /** True while the clock sits inside the quiet window, which may wrap past midnight. */
-    fun isQuietAt(timeMillis: Long): Boolean {
-        if (!quietEnabled || quietFromHour == quietToHour) return false
-        val hour = Calendar.getInstance().apply { timeInMillis = timeMillis }
-            .get(Calendar.HOUR_OF_DAY)
-        return if (quietFromHour < quietToHour) {
-            hour in quietFromHour until quietToHour
-        } else {
-            hour >= quietFromHour || hour < quietToHour
-        }
-    }
-
     /**
      * The alert as alternating on/off durations in milliseconds, starting with an "on".
      *
      * Shared by the vibrator and the beeper so a Double pattern feels and sounds like the
-     * same thing, and so "Both" lands the buzz and the beep on exactly the same edges.
+     * same shape whichever output is playing it.
      */
     fun segmentsMs(): LongArray {
         val on = (BASE_ON_MS * length.scale).toLong().coerceAtLeast(20L)
@@ -100,6 +85,40 @@ data class Prefs(
         private const val BASE_ON_MS = 72.0
         private const val BASE_GAP_MS = 95.0
     }
+}
+
+data class Prefs(
+    val enabled: Boolean = false,
+    val alertMode: AlertMode = AlertMode.VIBRATE,
+    val vibration: ChannelSettings = ChannelSettings(),
+    val beep: ChannelSettings = ChannelSettings(),
+    val quietEnabled: Boolean = false,
+    val quietFromHour: Int = 23,
+    val quietToHour: Int = 7,
+    val startOnBoot: Boolean = true,
+    val keepAwake: Boolean = false,
+    val bypassDnd: Boolean = true,
+    val buzzCount: Int = 0,
+) {
+    /** The settings the given output should use. */
+    fun channel(forBeep: Boolean): ChannelSettings = if (forBeep) beep else vibration
+
+    /** Returns a copy with only the named channel changed. */
+    fun withChannel(forBeep: Boolean, transform: (ChannelSettings) -> ChannelSettings): Prefs =
+        if (forBeep) copy(beep = transform(beep)) else copy(vibration = transform(vibration))
+
+    /** True while the clock sits inside the quiet window, which may wrap past midnight. */
+    fun isQuietAt(timeMillis: Long): Boolean {
+        if (!quietEnabled || quietFromHour == quietToHour) return false
+        val hour = Calendar.getInstance().apply { timeInMillis = timeMillis }
+            .get(Calendar.HOUR_OF_DAY)
+        return if (quietFromHour < quietToHour) {
+            hour in quietFromHour until quietToHour
+        } else {
+            hour >= quietFromHour || hour < quietToHour
+        }
+    }
+
 }
 
 /**
@@ -120,11 +139,17 @@ class SettingsStore private constructor(context: Context) {
 
     fun setAlertMode(value: AlertMode) = edit { putString(KEY_ALERT_MODE, value.name) }
 
-    fun setStrength(value: Int) = edit { putInt(KEY_STRENGTH, value.coerceIn(1, Prefs.MAX_STRENGTH)) }
+    fun setStrength(forBeep: Boolean, value: Int) = edit {
+        putInt(key(forBeep, SUFFIX_STRENGTH), value.coerceIn(1, ChannelSettings.MAX_STRENGTH))
+    }
 
-    fun setPattern(value: BuzzPattern) = edit { putString(KEY_PATTERN, value.name) }
+    fun setPattern(forBeep: Boolean, value: BuzzPattern) = edit {
+        putString(key(forBeep, SUFFIX_PATTERN), value.name)
+    }
 
-    fun setLength(value: BuzzLength) = edit { putString(KEY_LENGTH, value.name) }
+    fun setLength(forBeep: Boolean, value: BuzzLength) = edit {
+        putString(key(forBeep, SUFFIX_LENGTH), value.name)
+    }
 
     fun setQuietEnabled(value: Boolean) = edit { putBoolean(KEY_QUIET, value) }
 
@@ -150,9 +175,8 @@ class SettingsStore private constructor(context: Context) {
     private fun read() = Prefs(
         enabled = prefs.getBoolean(KEY_ENABLED, false),
         alertMode = enumOr(prefs.getString(KEY_ALERT_MODE, null), AlertMode.VIBRATE),
-        strength = prefs.getInt(KEY_STRENGTH, 3),
-        pattern = enumOr(prefs.getString(KEY_PATTERN, null), BuzzPattern.DOUBLE),
-        length = enumOr(prefs.getString(KEY_LENGTH, null), BuzzLength.MEDIUM),
+        vibration = readChannel(forBeep = false),
+        beep = readChannel(forBeep = true),
         quietEnabled = prefs.getBoolean(KEY_QUIET, false),
         quietFromHour = prefs.getInt(KEY_QUIET_FROM, 23),
         quietToHour = prefs.getInt(KEY_QUIET_TO, 7),
@@ -171,6 +195,25 @@ class SettingsStore private constructor(context: Context) {
      * stale — including [Pulser], which would then keep buzzing after the user switched the
      * app off. This class is the only writer, so publishing here is both simpler and safe.
      */
+    /**
+     * Reads one channel, falling back to the single shared setting this app used before the
+     * two channels existed. That way an upgrade keeps whatever the user had chosen — it
+     * simply becomes the starting point for both outputs — instead of silently resetting.
+     */
+    private fun readChannel(forBeep: Boolean): ChannelSettings {
+        val legacyStrength = prefs.getInt(LEGACY_STRENGTH, 3)
+        val legacyPattern = enumOr(prefs.getString(LEGACY_PATTERN, null), BuzzPattern.DOUBLE)
+        val legacyLength = enumOr(prefs.getString(LEGACY_LENGTH, null), BuzzLength.MEDIUM)
+        return ChannelSettings(
+            strength = prefs.getInt(key(forBeep, SUFFIX_STRENGTH), legacyStrength),
+            pattern = enumOr(prefs.getString(key(forBeep, SUFFIX_PATTERN), null), legacyPattern),
+            length = enumOr(prefs.getString(key(forBeep, SUFFIX_LENGTH), null), legacyLength),
+        )
+    }
+
+    private fun key(forBeep: Boolean, suffix: String) =
+        (if (forBeep) PREFIX_BEEP else PREFIX_VIBRATION) + suffix
+
     private inline fun edit(block: SharedPreferences.Editor.() -> Unit) {
         val editor = prefs.edit()
         editor.block()
@@ -182,9 +225,16 @@ class SettingsStore private constructor(context: Context) {
         private const val NAME = "white_rose"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_ALERT_MODE = "alert_mode"
-        private const val KEY_STRENGTH = "strength"
-        private const val KEY_PATTERN = "pattern"
-        private const val KEY_LENGTH = "length"
+        private const val PREFIX_VIBRATION = "vib_"
+        private const val PREFIX_BEEP = "beep_"
+        private const val SUFFIX_STRENGTH = "strength"
+        private const val SUFFIX_PATTERN = "pattern"
+        private const val SUFFIX_LENGTH = "length"
+
+        // Pre-two-channel keys, still read so existing installs carry their settings over.
+        private const val LEGACY_STRENGTH = "strength"
+        private const val LEGACY_PATTERN = "pattern"
+        private const val LEGACY_LENGTH = "length"
         private const val KEY_QUIET = "quiet"
         private const val KEY_QUIET_FROM = "quiet_from"
         private const val KEY_QUIET_TO = "quiet_to"

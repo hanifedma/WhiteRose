@@ -19,6 +19,11 @@ Built for the **Samsung Galaxy Watch 7 (40 mm)**, Wear OS 5 / One UI Watch 6.
 | **Strength** | 5 levels (Whisper → Maximum), mapped to real motor amplitude and beep volume |
 | **Pattern** | Single / Double / Triple / Long |
 | **Length** | Short / Medium / Long pulse duration |
+
+Strength, Pattern and Length are remembered **per output**. A long, slow buzz and a short, sharp
+beep are both reasonable choices, and neither should overwrite the other — so switching *Alert
+by* restores whatever that output was last set to. In **Both** mode the two appear as separate
+labelled groups, and each fires with its own settings.
 | **Quiet hours** | Optional window (e.g. 23:00–07:00) where it stays silent but stays armed |
 | **On restart** | Comes back by itself after the watch is powered off and on — **on by default** |
 | **Exact timing** | Optional wake lock for "never misses, uses more battery" |
@@ -179,6 +184,7 @@ app update, and whenever the clock or time zone changes.
 |---|---|
 | Accuracy | Alerts land 1–8 ms after the minute boundary, never twice in a minute |
 | Alert modes | Vibrate buzzes only; Beep beeps only; Both fire 6 ms apart on the same tick |
+| Per-output settings | Vibration held at Long/Long while Beep stayed Double/Medium; switching back and forth restored each |
 | Deep Doze, no battery exemption | 4 buzzes in 4 minutes — survives |
 | Deep Doze, battery exempt | 4 buzzes in 4 minutes — survives |
 | Reboot | Service and alarm back up unattended; buzzing resumed at the first minute after boot |

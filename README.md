@@ -57,36 +57,69 @@ You need the PC and the watch on the **same Wi-Fi network**.
 4. Turn on **ADB debugging**
 5. Turn on **Debug over Wi-Fi** (also called Wireless debugging)
 
-Under *Debug over Wi-Fi* the watch shows an address like `192.168.1.42:5555`. Note it down.
-If you only see the IP, the port is `5555`.
+### 2. Understand the two ports
 
-### 2. Connect and install (on this PC)
+This is the step that catches everyone. Wireless debugging uses **two different ports**, and
+they are not interchangeable:
+
+| Port | Where the watch shows it | Lifetime |
+|---|---|---|
+| **Pairing port** | Only inside the *Pair new device* popup, next to the 6-digit code | One-shot — closes the instant pairing finishes |
+| **Connect port** | On the main *Wireless debugging* screen, under *IP address & Port* | Until debugging is toggled off or the watch reboots |
+
+`adb pair` establishes trust. It does **not** attach the device. If you pair and then go
+straight to `adb install`, you get `no devices/emulators found` — pairing succeeded, but nothing
+is connected yet.
+
+### 3. Pair, connect, install (on this PC)
+
+Make sure `adb` is the SDK one. Mixing binaries causes
+`adb server version (41) doesn't match this client (39)`:
 
 ```bash
+export PATH="$HOME/Android/Sdk/platform-tools:$PATH"   # add to ~/.bashrc to make it stick
+adb version                                            # expect 1.0.41 or newer
+```
+
+Pairing is only needed the **first** time for a given watch:
+
+```bash
+adb pair 10.96.100.123:39731     # PAIRING port, from the popup; enter the 6-digit code
+```
+
+Then connect, using the port from the **main** Wireless debugging screen:
+
+```bash
+adb connect 10.96.100.123:35341  # CONNECT port — a different number
+adb devices                      # must show "device", not "offline"
 cd ~/AndroidStudioProjects/WhiteRoseApp
-adb connect 192.168.1.42:5555          # use your watch's address
-# tap "Allow" / "Always allow from this computer" on the watch when it asks
-adb devices                            # should list the watch as "device"
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-`adb` lives at `~/Android/Sdk/platform-tools/adb` if it isn't on your `PATH`.
+Every later session is just the `adb connect` line — the pairing is remembered. But re-read the
+connect port each time, because it changes whenever wireless debugging is toggled or the watch
+restarts.
 
-If your watch shows a **pairing code** instead of a plain `:5555` address, use the newer flow:
+**If `adb devices` says `offline`**, or `adb install` says `more than one device`, drop the stale
+entries and reconnect:
 
 ```bash
-adb pair 192.168.1.42:37somePort       # enter the 6-digit code shown on the watch
-adb connect 192.168.1.42:5555
+adb disconnect                   # drops all network devices
+adb connect 10.96.100.123:35341
 ```
 
-### 3. First run (on the watch)
+Both the watch and the PC must be on the same network, and some networks (guest or campus Wi-Fi
+with client isolation) block device-to-device traffic entirely. `ping <watch-ip>` is the quick
+way to tell whether the watch is reachable at all.
+
+### 4. First run (on the watch)
 
 1. Open **White Rose** from the app list
 2. Tap the rose in the middle — the ring lights up and the countdown starts
 3. Allow **notifications** when asked (the app runs without it, but you lose the status chip)
 4. Scroll down to **Battery** and tap **Tap to allow** → choose **Allow / Don't optimise**
 
-### 4. One extra Samsung step — important
+### 5. One extra Samsung step — important
 
 One UI puts idle apps to sleep, which will kill the pulse. On the **watch**:
 
